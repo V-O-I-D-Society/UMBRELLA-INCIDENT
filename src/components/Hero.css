@@ -1,0 +1,238 @@
+.emblem-contour {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 999;
+
+  pointer-events: none;
+
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: cover;
+  mask-repeat: no-repeat;
+  mask-size: cover;
+
+  -webkit-mask-image: var(--image-path);
+  mask-image: var(--image-path);
+
+  &:before {
+    content: "";
+    z-index: 10;
+    position: absolute;
+    height: 200%;
+    width: 200%;
+    top: -120%;
+    left: -120%;
+    background: linear-gradient(
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 45%,
+      rgba(255, 255, 255, 0.5) 50%,
+      rgba(255, 255, 255, 0.1) 55%,
+      transparent 100%
+    );
+    transition: all 2s;
+    transform: rotate(-45deg);
+    animation: shine 3s infinite forwards ease-in-out;
+  }
+}
+
+@keyframes shine {
+  0% {
+    top: -120%;
+    left: -120%;
+  }
+  100% {
+    left: 100%;
+    top: 100%;
+  }
+}
+
+.neon-glow {
+  /* Change color/intensity here */
+  --neon-color: red;
+  filter: drop-shadow(0 0 1px var(--neon-color))
+    drop-shadow(0 0 1px var(--neon-color))
+    drop-shadow(0 0 4px var(--neon-color))
+    drop-shadow(0 0 8px var(--neon-color));
+}
+
+/* Optional soft pulse */
+.neon-glow.neon-pulse {
+  animation: neon-pulse 2.6s ease-in-out infinite;
+}
+@keyframes neon-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 2px var(--neon-color))
+      drop-shadow(0 0 6px var(--neon-color))
+      drop-shadow(0 0 9px var(--neon-color))
+      drop-shadow(0 0 12px var(--neon-color));
+  }
+  50% {
+    filter: drop-shadow(0 0 3px var(--neon-color))
+      drop-shadow(0 0 8px var(--neon-color))
+      drop-shadow(0 0 12px var(--neon-color))
+      drop-shadow(0 0 21px var(--neon-color));
+  }
+}
+
+.neon-glow-gradient {
+  /* inner blue -> cyan -> magenta outer */
+  filter: drop-shadow(0 0 4px #2a7bff) drop-shadow(0 0 10px #31d4ff)
+    drop-shadow(0 0 18px #9f4dff) drop-shadow(0 0 28px #ff2ad1);
+}
+
+.emblem-glow-gradient {
+  position: absolute;
+  inset: -6%; /* slight oversize so blur bleeds nicely */
+  pointer-events: none;
+  z-index: 5;
+
+  /* clip the gradient to the emblem contour image */
+  -webkit-mask-image: var(--image-path);
+  mask-image: var(--image-path);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-position: center;
+  mask-position: center;
+
+  /* multi-color gradient */
+  background: conic-gradient(
+    from 210deg at 50% 50%,
+    #2a7bff 0%,
+    #31d4ff 25%,
+    #6effd3 40%,
+    #ff2ad1 70%,
+    #ff4d4d 85%,
+    #2a7bff 100%
+  );
+
+  filter: blur(14px) saturate(1.25);
+  mix-blend-mode: screen; /* add light */
+  opacity: 0.9;
+}
+
+/* optional slow hue cycle */
+@keyframes glow-hue {
+  0% {
+    filter: blur(14px) saturate(1.25) hue-rotate(0deg);
+  }
+  100% {
+    filter: blur(14px) saturate(1.25) hue-rotate(360deg);
+  }
+}
+.emblem-glow-gradient.glow-animate {
+  animation: glow-hue 12s linear infinite;
+}
+
+.headline-stack {
+  position: relative;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* Base typing effect */
+.typing {
+  display: inline-block;
+  white-space: nowrap;
+  overflow: hidden;
+  border-right: 0.08em currentColor; /* caret */
+}
+
+/* Caret blink */
+@keyframes caret {
+  50% {
+    border-color: transparent;
+  }
+}
+
+/* Reveal width in steps (monospace recommended) */
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--w, 11ch);
+  } /* set --w and --n inline */
+}
+
+/* Gradient sweep for the top layer */
+@keyframes sweep {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+/* Fade the gradient layer away after typing */
+@keyframes fadeOut {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Typewriter cursor blink */
+@keyframes cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.cursor-blink {
+  animation: cursor-blink 1s infinite;
+}
+
+/* Bottom layer: solid white, no caret blink */
+.layer-solid {
+  position: relative;
+  color: #fff;
+  animation: typing 1.5s steps(var(--n, 11)) 0.1s forwards;
+  border-right-color: transparent; /* no caret on base layer */
+}
+
+/* Top layer: gradient text, caret + sweep + fade out */
+.layer-gradient {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-image: linear-gradient(90deg, #ef4444, #ffffff, #60a5fa);
+  background-size: 200% 100%;
+  animation: typing 1.5s steps(var(--n, 11)) 0.1s forwards,
+    caret 1s step-end infinite, sweep 1.5s ease-out 0.1s forwards,
+    fadeOut 0.45s ease-out 1.7s forwards; /* fade after typing */
+}
+
+.glitch-title {
+  text-shadow: 0 0 5px #ff2d55, 0 0 10px #ff2d55, 0 0 15px #ff2d55,
+    0 0 20px #ff2d55;
+  animation: glitch 2s infinite;
+}
+
+@keyframes glitch {
+  0%,
+  100% {
+    text-shadow: 0 0 5px #ff2d55, 0 0 10px #ff2d55, 0 0 15px #ff2d55,
+      0 0 20px #ff2d55;
+  }
+  25% {
+    text-shadow: 0 0 5px #00a7ff, 0 0 10px #00a7ff, 0 0 15px #00a7ff,
+      0 0 20px #00a7ff;
+  }
+  50% {
+    text-shadow: 2px 0 #ff2d55, -2px 0 #00a7ff, 0 0 10px #ff2d55;
+  }
+}
