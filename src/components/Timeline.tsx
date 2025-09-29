@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence, useAnimation } from 'framer-motion';
-import { X, ChevronRight, AlertTriangle, Shield, Zap, Lock, Calendar, InfoIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useInView } from 'react-intersection-observer';
 
 // Timeline event data structure
 export interface TimelineEvent {
@@ -11,11 +10,10 @@ export interface TimelineEvent {
   description: string;
   position: 'left' | 'right';
   date: string;
-  icon?: string; // Path to icon image
-  detailImage?: string; // Optional image for popup
-  color: string; // Color theme for this event
-  type?: 'breach' | 'defense' | 'attack' | 'encrypted'; // Optional event type for icon selection
-  importance?: number; // Optional importance level (1-5)
+  color: string;
+  type: string;
+  importance: number;
+  detailImage?: string;
 }
 
 // Main Timeline component props
@@ -23,357 +21,221 @@ interface TimelineProps {
   events: TimelineEvent[];
 }
 
-// Helper function to get icon based on event type
-const getEventIcon = (event: TimelineEvent) => {
-  if (event.icon) return null; // Use custom icon if provided
-  
-  switch(event.type) {
-    case 'breach':
-      return <AlertTriangle className="w-4 h-4" style={{ color: event.color }} />;
-    case 'defense':
-      return <Shield className="w-4 h-4" style={{ color: event.color }} />;
-    case 'attack':
-      return <Zap className="w-4 h-4" style={{ color: event.color }} />;
-    case 'encrypted':
-      return <Lock className="w-4 h-4" style={{ color: event.color }} />;
-    default:
-      return <InfoIcon className="w-4 h-4" style={{ color: event.color }} />;
-  }
-};
-
-// Branch SVG path generator for connecting lines
-const generateBranchPath = (position: 'left' | 'right', length: number = 100): string => {
-  const direction = position === 'left' ? -1 : 1;
-  const curveStrength = Math.floor(Math.random() * 20) + 30; // Random curve between 30-50
-  
-  return `M0,0 C${curveStrength * direction},${length/3} ${curveStrength * direction},${2*length/3} 0,${length}`;
-};
-
 const Timeline: React.FC<TimelineProps> = ({ events }) => {
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
-  const [activeEventId, setActiveEventId] = useState<string | null>(null);
-  const controls = useAnimation();
   
-  // Generate branch paths for each event
-  const branchPaths = useMemo(() => {
-    return events.map(event => ({
-      id: event.id,
-      path: generateBranchPath(event.position, 100 + (event.importance || 1) * 20),
-      position: event.position
-    }));
-  }, [events]);
-
-  // Open popup with event details
-  const handleEventClick = (event: TimelineEvent) => {
-    setSelectedEvent(event);
-    setActiveEventId(event.id);
+  // Toggle event details visibility
+  const toggleEventDetails = (event: TimelineEvent) => {
+    if (selectedEvent && selectedEvent.id === event.id) {
+      setSelectedEvent(null);
+    } else {
+      setSelectedEvent(event);
+    }
   };
-
-  // Close the popup
-  const handleClosePopup = () => {
-    setSelectedEvent(null);
-    setTimeout(() => setActiveEventId(null), 300);
-  };
-
-  // Initialize animation for scroll reveal
-  useEffect(() => {
-    controls.start(i => ({
-      opacity: 1,
-      y: 0,
-      transition: { delay: i * 0.2, duration: 0.8, ease: "easeOut" }
-    }));
-  }, [controls]);
 
   return (
-    <div className="relative py-16 px-4 md:px-6 lg:px-8 max-w-7xl mx-auto">
-      {/* Tree trunk (vertical line) with glow effect */}
-      <motion.div 
-        className="absolute left-1/2 top-0 bottom-0 w-1 bg-white/30 transform -translate-x-1/2"
-        initial={{ height: 0 }}
-        animate={{ height: '100%' }}
-        transition={{ duration: 1.5, ease: "easeInOut" }}
-        style={{ boxShadow: '0 0 10px rgba(255, 255, 255, 0.5)' }}
-      />
+    <div className="relative w-full py-10">
+      {/* Central line */}
+      <div className="absolute left-1/2 transform -translate-x-1/2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-white/5 via-white/10 to-white/5"></div>
       
-      {/* Animated root node at top */}
-      <motion.div 
-        className="absolute left-1/2 top-0 transform -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-white rounded-full z-10"
-        initial={{ scale: 0 }}
-        animate={{ scale: [0, 1.5, 1], boxShadow: ['0 0 0 rgba(255, 255, 255, 0)', '0 0 30px rgba(255, 255, 255, 0.8)', '0 0 20px rgba(255, 255, 255, 0.4)'] }}
-        transition={{ duration: 1, delay: 0.2 }}
-      />
-      
-      {/* Branch patterns - using SVG for better control */}
-      {branchPaths.map((branch, index) => (
-        <div 
-          key={branch.id}
-          className="absolute left-1/2 h-32"
-          style={{ 
-            top: `${160 + (index * 240)}px`,
-            transform: `translate(${branch.position === 'left' ? '-100%' : '0%'}, -50%)`,
-            width: '50%',
-          }}
-        >
-          <motion.svg
-            width="100%" 
-            height="100%" 
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 1 }}
-            transition={{ duration: 1, delay: index * 0.15 + 0.5 }}
-            style={{ overflow: 'visible' }}
-          >
-            <motion.path
-              d={branch.path}
-              stroke="rgba(255, 255, 255, 0.3)"
-              strokeWidth="2"
-              fill="none"
-              strokeLinecap="round"
-              style={{ 
-                filter: 'drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))', 
-                transformOrigin: 'center left', 
-                transform: branch.position === 'right' ? 'translateX(1px)' : 'translateX(-1px) scaleX(-1)'
-              }}
-            />
-          </motion.svg>
-        </div>
-      ))}
-
       {/* Timeline events */}
-      <div className="relative z-10 mt-16">
-        {events.map((event) => {
-          // Use react-intersection-observer hook for each event
-          const [ref, inView] = useInView({
-            threshold: 0.2,
-            triggerOnce: true
-          });
-          
-          const isActive = event.id === activeEventId;
-          
-          return (
-            <motion.div
-              key={event.id}
-              ref={ref}
-              className={`flex items-center mb-48 ${event.position === 'left' ? 'justify-start' : 'justify-end'}`}
-              initial={{ opacity: 0, y: 50 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.8, delay: 0.1 }}
-            >
-              <div className={`relative flex ${event.position === 'left' ? 'mr-auto' : 'ml-auto'} w-5/12`}>
-                {/* Event node/bubble with animation */}
-                <motion.div 
-                  className={`absolute top-0 ${event.position === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2'} -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center cursor-pointer z-10 border-2`}
-                  style={{ 
-                    backgroundColor: `${event.color}20`,
-                    borderColor: event.color,
-                    boxShadow: isActive 
-                      ? `0 0 30px ${event.color}80, inset 0 0 15px ${event.color}60` 
-                      : `0 0 15px ${event.color}40` 
-                  }}
-                  whileHover={{ 
-                    scale: 1.2, 
-                    boxShadow: `0 0 25px ${event.color}70, inset 0 0 10px ${event.color}40` 
-                  }}
-                  animate={isActive ? { 
-                    scale: [1, 1.4, 1.2],
-                    boxShadow: [
-                      `0 0 15px ${event.color}40`, 
-                      `0 0 40px ${event.color}90, inset 0 0 20px ${event.color}70`,
-                      `0 0 30px ${event.color}80, inset 0 0 15px ${event.color}60`
-                    ]
-                  } : {}}
-                  transition={{ duration: 0.5 }}
-                  onClick={() => handleEventClick(event)}
-                >
-                  {event.icon ? (
-                    <img src={event.icon} alt="" className="w-6 h-6" />
-                  ) : (
-                    getEventIcon(event)
-                  )}
-
-                  {/* Pulsing animation for active event */}
-                  {isActive && (
-                    <motion.div
-                      className="absolute inset-0 rounded-full"
-                      animate={{ 
-                        scale: [1, 1.6, 1], 
-                        opacity: [0.7, 0, 0.7] 
-                      }}
-                      transition={{ 
-                        duration: 2,
-                        repeat: Infinity,
-                        repeatType: "loop"
-                      }}
-                      style={{ 
-                        border: `2px solid ${event.color}`,
-                        backgroundColor: 'transparent'
-                      }}
-                    />
-                  )}
-                </motion.div>
-
-                {/* Date bubble */}
-                <motion.div
-                  className={`absolute ${event.position === 'left' ? 'right-14' : 'left-14'}  top-0 z-10 -translate-y-1/2 bg-gray-900/80 px-3 py-1 rounded-full border border-gray-700 flex items-center gap-1`}
-                  initial={{ opacity: 0, x: event.position === 'left' ? 20 : -20 }}
-                  animate={inView ? { opacity: 1, x: 0 } : {}}
-                  transition={{ duration: 0.5, delay: 0.2 }}
-                >
-                  <Calendar className="w-3 h-3 text-gray-400" />
-                  <p className="text-xs font-mono text-gray-300">{event.date}</p>
-                </motion.div>
-
-                {/* Event card with enhanced hover effects */}
-                <motion.div 
-                  className={`${event.position === 'left' ? 'text-right pr-20' : 'text-left pl-20'} py-6 bg-gray-900/50 backdrop-blur-sm rounded-lg border border-gray-800/50 px-6`}
-                  style={{ 
-                    boxShadow: isActive 
-                      ? `0 10px 30px -10px ${event.color}30, 0 0 0 1px ${event.color}30` 
-                      : '0 10px 30px -15px rgba(0, 0, 0, 0.5)' 
-                  }}
-                  whileHover={{ 
-                    y: -8,
-                    boxShadow: `0 20px 40px -12px ${event.color}40, 0 0 0 1px ${event.color}40`,
-                    backgroundColor: `rgba(30, 30, 30, 0.7)`
-                  }}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={inView ? { opacity: 1, y: 0 } : {}}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                >
-                  <h3 
-                    className="text-xl font-bold mb-2" 
-                    style={{ 
-                      color: event.color,
-                      textShadow: `0 0 8px ${event.color}40` 
-                    }}
-                  >
-                    {event.title}
-                  </h3>
-                  
-                  <p className="text-sm text-gray-300 line-clamp-3">
-                    {event.description}
-                  </p>
-                  
-                  <motion.div 
-                    className="mt-4"
-                    initial={{ opacity: 0 }}
-                    animate={inView ? { opacity: 1 } : {}}
-                    transition={{ delay: 0.5 }}
-                  >
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className={`group ${event.position === 'left' ? 'ml-auto' : ''} border-gray-700 hover:border-gray-500`}
-                      onClick={() => handleEventClick(event)}
-                    >
-                      <span style={{ color: event.color }}>View Details</span>
-                      <ChevronRight 
-                        className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-1" 
-                        style={{ color: event.color }} 
-                      />
-                    </Button>
-                  </motion.div>
-                </motion.div>
+      <div className="flex flex-col items-center">
+        {events.map((event, index) => (
+          <div key={event.id} className="w-full mb-12 md:mb-20">
+            {/* Mobile view - always centered, simplified layout */}
+            <div className="md:hidden flex flex-col items-center relative">
+              {/* Date indicator */}
+              <div 
+                className="px-3 py-1.5 rounded-full text-white text-xs font-semibold mb-3"
+                style={{ backgroundColor: `${event.color}30` }}
+              >
+                {event.date}
               </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* Enhanced popup for event details */}
-      <AnimatePresence>
-        {selectedEvent && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleClosePopup}
-          >
-            <motion.div 
-              className="bg-gray-900 border rounded-xl max-w-3xl w-full max-h-[80vh] overflow-y-auto"
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{ 
-                boxShadow: `0 0 50px ${selectedEvent.color}30`,
-                borderColor: `${selectedEvent.color}40`,
-              }}
-            >
-              <div className="relative p-8">
-                {/* Close button with animation */}
-                <motion.button 
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center bg-gray-800/80 hover:bg-gray-700 z-10"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleClosePopup}
-                >
-                  <X size={16} />
-                </motion.button>
-                
-                {/* Event icon */}
-                <div 
-                  className="w-12 h-12 rounded-full flex items-center justify-center mb-4"
-                  style={{ 
-                    backgroundColor: `${selectedEvent.color}20`,
-                    boxShadow: `0 0 15px ${selectedEvent.color}40` 
-                  }}
-                >
-                  {selectedEvent.icon ? (
-                    <img src={selectedEvent.icon} alt="" className="w-6 h-6" />
-                  ) : (
-                    getEventIcon(selectedEvent)
-                  )}
-                </div>
-                
-                <div className="flex items-center gap-3 mb-2">
-                  <h2 
-                    className="text-3xl font-bold" 
-                    style={{ 
-                      color: selectedEvent.color,
-                      textShadow: `0 0 10px ${selectedEvent.color}40` 
-                    }}
-                  >
-                    {selectedEvent.title}
-                  </h2>
-                </div>
-                
-                <div className="flex items-center gap-2 mb-6">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm font-mono text-gray-400">{selectedEvent.date}</p>
-                </div>
-                
-                {/* Image with animated entry */}
-                {selectedEvent.detailImage && (
-                  <motion.div 
-                    className="mb-6"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    <img 
-                      src={selectedEvent.detailImage} 
-                      alt={selectedEvent.title} 
-                      className="w-full rounded-lg object-cover h-64 border border-gray-800"
-                      style={{ boxShadow: `0 10px 30px -5px ${selectedEvent.color}20` }}
-                    />
-                  </motion.div>
+              
+              {/* Event node with icon */}
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center z-10 shadow-lg"
+                style={{ backgroundColor: event.color }}
+              >
+                {event.type === 'breach' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
                 )}
-                
-                {/* Description text with animated entry */}
-                <motion.div 
-                  className="prose prose-lg max-w-none prose-invert"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <p className="text-gray-300 leading-relaxed">{selectedEvent.description}</p>
-                </motion.div>
+                {event.type === 'defense' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {event.type === 'attack' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" />
+                  </svg>
+                )}
+                {event.type === 'encrypted' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                )}
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              
+              {/* Event content - always below the node on mobile */}
+              <motion.div 
+                className="bg-black/30 backdrop-blur-sm rounded-lg p-4 mt-4 border border-white/5 w-full max-w-sm"
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5 }}
+                style={{ 
+                  boxShadow: `0 4px 20px -5px ${event.color}30`
+                }}
+              >
+                <h3 className="text-xl font-bold mb-2" style={{ color: event.color }}>{event.title}</h3>
+                
+                {selectedEvent && selectedEvent.id === event.id ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-300">{event.description}</p>
+                    
+                    {event.detailImage && (
+                      <div className="mt-3 flex justify-center">
+                        <img 
+                          src={event.detailImage} 
+                          alt={event.title} 
+                          className="w-20 h-20 object-contain opacity-70"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    <Button 
+                      onClick={() => toggleEventDetails(event)} 
+                      variant="ghost" 
+                      className="text-xs mt-2 text-gray-400 hover:text-white p-0"
+                    >
+                      Show Less
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-gray-300 line-clamp-2">{event.description}</p>
+                    <Button 
+                      onClick={() => toggleEventDetails(event)} 
+                      variant="ghost" 
+                      className="flex items-center gap-1 text-xs mt-2 text-gray-400 hover:text-white p-0"
+                    >
+                      View Details <ChevronRight size={12} />
+                    </Button>
+                  </>
+                )}
+              </motion.div>
+            </div>
+            
+            {/* Desktop view - alternating left/right layout */}
+            <div className="hidden md:block">
+              <div className={`flex ${event.position === 'left' ? 'justify-start' : 'justify-end'}`}>
+                <div className={`relative ${event.position === 'left' ? 'text-right pr-8' : 'text-left pl-8'} w-1/2`}>
+                  {/* Date indicator for desktop */}
+                  <div 
+                    className={`inline-block px-3 py-1.5 rounded-full text-white text-xs font-semibold mb-3 ${event.position === 'left' ? 'float-right' : 'float-left'}`}
+                    style={{ backgroundColor: `${event.color}30` }}
+                  >
+                    {event.date}
+                  </div>
+                  
+                  <motion.div 
+                    className="bg-black/30 backdrop-blur-sm rounded-lg p-6 border border-white/5"
+                    initial={{ opacity: 0, x: event.position === 'left' ? 30 : -30 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.5 }}
+                    style={{ 
+                      boxShadow: `0 4px 20px -5px ${event.color}30`
+                    }}
+                  >
+                    <h3 className="text-xl font-bold mb-2" style={{ color: event.color }}>{event.title}</h3>
+                    
+                    {selectedEvent && selectedEvent.id === event.id ? (
+                      <div className="space-y-4">
+                        <p className="text-gray-300">{event.description}</p>
+                        
+                        {event.detailImage && (
+                          <div className="mt-3 flex justify-center">
+                            <img 
+                              src={event.detailImage} 
+                              alt={event.title} 
+                              className="w-24 h-24 object-contain opacity-70"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        <Button 
+                          onClick={() => toggleEventDetails(event)} 
+                          variant="ghost" 
+                          className="text-xs text-gray-400 hover:text-white p-0"
+                        >
+                          Show Less
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-gray-300 line-clamp-2">{event.description}</p>
+                        <Button 
+                          onClick={() => toggleEventDetails(event)} 
+                          variant="ghost" 
+                          className="flex items-center gap-1 text-xs mt-2 text-gray-400 hover:text-white p-0"
+                        >
+                          View Details <ChevronRight size={12} />
+                        </Button>
+                      </>
+                    )}
+                  </motion.div>
+                  
+                  {/* Event node connector for desktop */}
+                  <div 
+                    className={`absolute top-1/4 ${event.position === 'left' ? '-right-5' : '-left-5'} w-10 h-0.5`}
+                    style={{ backgroundColor: event.color }}
+                  ></div>
+                </div>
+              </div>
+              
+              {/* Desktop timeline node */}
+              <div 
+                className="absolute left-1/2 transform -translate-x-1/2 w-10 h-10 rounded-full flex items-center justify-center z-10 shadow-lg"
+                style={{ 
+                  backgroundColor: event.color,
+                  top: `${index * 160 + 80}px` // Adjust positioning based on index
+                }}
+              >
+                {event.type === 'breach' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {event.type === 'defense' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {event.type === 'attack' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" />
+                  </svg>
+                )}
+                {event.type === 'encrypted' && (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

@@ -4,11 +4,27 @@ import '@/components/Hero.css'; // Reusing the CSS from Hero
 import { Button } from '@/components/ui/button';
 import Timeline from '@/components/Timeline';
 import TreeBackground from '@/components/TreeBackground';
+import Footer from '@/components/Footer';
 import { ArrowDown } from 'lucide-react';
-import animationVideo from '@/assets/animation-video.mp4'; // Import the video
+import { useNavigate } from 'react-router-dom';
 
 // Import the TimelineEvent type from the Timeline component
 import type { TimelineEvent } from '@/components/Timeline';
+
+// Try to import videos, but handle if they fail to load
+let animationVideo: string;
+let animationVideoPortrait: string;
+
+try {
+  // Dynamic imports for the videos to handle potential import errors
+  animationVideo = new URL('@/assets/animation-video.mp4', import.meta.url).href;
+  animationVideoPortrait = new URL('@/assets/animation-video-port.mp4', import.meta.url).href;
+} catch (e) {
+  console.warn("Could not load video files:", e);
+  // Fallback URLs if needed
+  animationVideo = '';
+  animationVideoPortrait = '';
+}
 
 // Define timeline events with proper typing
 const timelineEvents: TimelineEvent[] = [
@@ -125,46 +141,155 @@ const timelineEvents: TimelineEvent[] = [
 ];
 
 const WTF: React.FC = () => {
+  const navigate = useNavigate();
+  
   // States to manage the sequence
   const [displayText, setDisplayText] = useState("");
   const [showIntro, setShowIntro] = useState(true);
   const [showVideo, setShowVideo] = useState(false);
   const [showContent, setShowContent] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const [videosReady, setVideosReady] = useState({
+    landscape: false,
+    portrait: false
+  });
   const videoRef = useRef<HTMLVideoElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   
   const fullText = "Nothing Ever Goes As Planned";
 
+  // Check session storage on component mount
+  useEffect(() => {
+    const introSeenTimestamp = sessionStorage.getItem('umbrellaIncidentIntroSeen');
+    
+    if (introSeenTimestamp) {
+      const currentTime = new Date().getTime();
+      const timeElapsed = currentTime - parseInt(introSeenTimestamp);
+      const fiveMinutesInMs = 5 * 60 * 1000;
+      
+      // If less than 5 minutes have passed, skip intro and video
+      if (timeElapsed < fiveMinutesInMs) {
+        setShowIntro(false);
+        setShowVideo(false);
+        setShowContent(true);
+      }
+    }
+  }, []);
+  
+  // Detect device orientation
+  useEffect(() => {
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+    
+    // Initial check
+    checkOrientation();
+    
+    // Add event listener for resize/orientation change
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
+
   // Initial typing animation
   useEffect(() => {
-    let i = 0;
-    setDisplayText("");
-    const typingInterval = setInterval(() => {
-      if (i < fullText.length) {
-        setDisplayText(fullText.slice(0, i + 1));
-        i++;
-      } else {
-        clearInterval(typingInterval);
-      }
-    }, 120);
+    // Only run typing animation if we're showing the intro
+    if (showIntro) {
+      let i = 0;
+      setDisplayText("");
+      const typingInterval = setInterval(() => {
+        if (i < fullText.length) {
+          setDisplayText(fullText.slice(0, i + 1));
+          i++;
+        } else {
+          clearInterval(typingInterval);
+        }
+      }, 120);
 
-    return () => clearInterval(typingInterval);
+      return () => clearInterval(typingInterval);
+    }
+  }, [showIntro]);
+
+  // Check if videos exist and can be loaded
+  useEffect(() => {
+    // Check if the video files exist
+    const checkVideo = (url: string, type: 'landscape' | 'portrait') => {
+      if (!url) {
+        // If URL is empty, mark as error
+        if (type === 'landscape') {
+          setVideosReady(prev => ({ ...prev, landscape: false }));
+        } else {
+          setVideosReady(prev => ({ ...prev, portrait: false }));
+        }
+        return;
+      }
+      
+      fetch(url, { method: 'HEAD' })
+        .then(response => {
+          if (type === 'landscape') {
+            setVideosReady(prev => ({ ...prev, landscape: response.ok }));
+          } else {
+            setVideosReady(prev => ({ ...prev, portrait: response.ok }));
+          }
+        })
+        .catch(() => {
+          if (type === 'landscape') {
+            setVideosReady(prev => ({ ...prev, landscape: false }));
+          } else {
+            setVideosReady(prev => ({ ...prev, portrait: false }));
+          }
+        });
+    };
+    
+    checkVideo(animationVideo, 'landscape');
+    checkVideo(animationVideoPortrait, 'portrait');
   }, []);
 
   // Handle button click to start video
   const handleStartVideo = () => {
     setShowIntro(false); // Hide the intro text and button
     
+    // Check if videos are available
+    if ((isPortrait && !videosReady.portrait) || (!isPortrait && !videosReady.landscape)) {
+      // No video available, skip directly to content
+      handleVideoEnded();
+      return;
+    }
+    
+    // Store timestamp in session storage
+    const currentTime = new Date().getTime();
+    sessionStorage.setItem('umbrellaIncidentIntroSeen', currentTime.toString());
+    
     // Small delay before showing video for smooth transition
     setTimeout(() => {
       setShowVideo(true);
+      setVideoError(false);
       
-      // Play the video after it's shown
+      // Play the video after it's shown with a safety timeout
       setTimeout(() => {
         if (videoRef.current) {
-          videoRef.current.play().catch(err => console.error("Error playing video:", err));
+          videoRef.current.play()
+            .catch(err => {
+              console.error("Error playing video:", err);
+              setVideoError(true);
+              // If video can't play, wait 2 seconds and then proceed to content
+              setTimeout(handleVideoEnded, 2000);
+            });
         }
       }, 200);
+      
+      // Safety timeout - if video doesn't end naturally within 45 seconds, force progression
+      setTimeout(() => {
+        if (showVideo) {
+          handleVideoEnded();
+        }
+      }, 45000);
     }, 500);
   };
 
@@ -173,14 +298,88 @@ const WTF: React.FC = () => {
     // Fade out video
     setShowVideo(false);
     
+    // Store timestamp in session storage
+    const currentTime = new Date().getTime();
+    sessionStorage.setItem('umbrellaIncidentIntroSeen', currentTime.toString());
+    
     // Show main content after video fade out
     setTimeout(() => {
       setShowContent(true);
     }, 600);
   };
 
+  // Create a text-based animation fallback for when videos aren't available
+  const FallbackAnimation = () => (
+    <motion.div 
+      className="fixed inset-0 z-20 flex flex-col items-center justify-center bg-black p-6 text-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.6 }}
+    >
+      <motion.div
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        className="mb-8"
+      >
+        <img 
+          src="/images/umbrella-logo.svg" 
+          alt="Umbrella Corporation" 
+          className="w-24 h-24 mx-auto mb-4"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
+        />
+        <h2 className="text-2xl md:text-3xl text-red-500 font-bold mb-2">SECURITY ALERT</h2>
+      </motion.div>
+      
+      <motion.div 
+        className="space-y-6 max-w-2xl"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3, duration: 1 }}
+      >
+        <p className="text-white text-lg md:text-xl font-mono">
+          Umbrella Corporation Security Systems have detected a breach in our network...
+        </p>
+        <p className="text-white text-lg md:text-xl font-mono">
+          Multiple access attempts from unauthorized personnel...
+        </p>
+        <p className="text-white text-lg md:text-xl font-mono">
+          RED and BLUE teams have been deployed to contain the situation...
+        </p>
+      </motion.div>
+      
+      <motion.div 
+        className="mt-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1.5, duration: 0.5 }}
+      >
+        <Button
+          className="bg-red-600 hover:bg-red-700 text-white px-6 py-3"
+          onClick={() => {
+            setTimeout(handleVideoEnded, 500);
+          }}
+        >
+          View Incident Report
+        </Button>
+      </motion.div>
+      
+      {/* Auto-proceed after 6 seconds */}
+      <motion.div 
+        className="w-full h-1 bg-red-800/50 absolute bottom-0 left-0"
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={{ duration: 6, ease: "linear" }}
+        onAnimationComplete={() => setTimeout(handleVideoEnded, 500)}
+      />
+    </motion.div>
+  );
+
   return (
-    <div className="flex items-center justify-center min-h-screen bg-black overflow-hidden">
+    <div className="flex items-center justify-center min-h-screen bg-black overflow-hidden relative">
       <AnimatePresence>
         {/* Intro Section with Text and Button */}
         {showIntro && (
@@ -209,7 +408,7 @@ const WTF: React.FC = () => {
               className="mt-12"
             >
               <Button 
-                className="bg-transparent hover:bg-white/10 text-white px-8 py-6 text-xl font-mono transition-all duration-300"
+                className="bg-transparent hover:bg-white/10 border-2 border-amber-100 text-white px-8 py-6 text-xl font-mono transition-all duration-300"
                 size="lg"
                 onClick={handleStartVideo}
               >
@@ -219,37 +418,59 @@ const WTF: React.FC = () => {
           </motion.div>
         )}
 
-        {/* Video Animation Section */}
+        {/* Video Animation Section - Responsive based on orientation OR Fallback */}
         {showVideo && (
-          <motion.div 
-            className="fixed inset-0 z-20 flex items-center justify-center bg-black"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <video
-              ref={videoRef}
-              className="max-w-full max-h-full"
-              onEnded={handleVideoEnded}
-              muted
-            >
-              <source src={animationVideo} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </motion.div>
+          <>
+            {/* Show fallback if video error or videos not ready */}
+            {(videoError || 
+             (isPortrait && !videosReady.portrait) || 
+             (!isPortrait && !videosReady.landscape)) ? (
+              <FallbackAnimation />
+            ) : (
+              <motion.div 
+                className="fixed inset-0 z-20 flex items-center justify-center bg-black"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6 }}
+              >
+                <video
+                  ref={videoRef}
+                  className={`${isPortrait ? 'h-full' : 'max-w-full max-h-full'} object-contain`}
+                  src={isPortrait ? animationVideoPortrait : animationVideo}
+                  preload="auto"
+                  onEnded={handleVideoEnded}
+                  onError={(e) => {
+                    console.error("Video error:", e);
+                    setVideoError(true);
+                  }}
+                  muted
+                  playsInline
+                />
+                <div className="absolute bottom-6 right-6">
+                  <Button
+                    className="bg-black/40 hover:bg-black/60 text-white text-xs p-2"
+                    onClick={handleVideoEnded}
+                    variant="ghost"
+                  >
+                    Skip
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </>
         )}
 
         {/* Main Content Section - shown after video */}
         {showContent && (
           <motion.div 
-            className="relative z-10 container mx-auto px-4"
+            className="relative z-10 container mx-auto px-4 flex flex-col min-h-screen"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1 }}
           >
             {/* Hero section with enhanced animations */}
-            <div className="text-white mb-32 relative">
+            <div className="text-white mb-16 md:mb-32 relative pt-10 md:pt-0">
               {/* Decorative elements */}
               <motion.div
                 className="absolute w-20 h-20 rounded-full bg-red-500/10 blur-2xl -left-5 top-20"
@@ -265,7 +486,7 @@ const WTF: React.FC = () => {
               />
               
               <motion.h1 
-                className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 text-center"
+                className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-6 text-center"
                 initial={{ opacity: 0, y: -30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2, duration: 0.8, type: "spring" }}
@@ -276,7 +497,7 @@ const WTF: React.FC = () => {
               </motion.h1>
 
               <motion.p 
-                className="text-xl text-center max-w-3xl mx-auto text-gray-300"
+                className="text-lg md:text-xl text-center max-w-3xl mx-auto text-gray-300 px-2"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.6, duration: 0.8 }}
@@ -287,16 +508,16 @@ const WTF: React.FC = () => {
               </motion.p>
               
               <motion.div 
-                className="flex justify-center mt-12"
+                className="flex justify-center mt-8 md:mt-12"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.8, duration: 0.6 }}
               >
                 <Button
-                  className="group bg-white/10 hover:bg-white/20 text-white flex items-center gap-2 py-6 px-8 border border-white/10 rounded-lg shadow-lg"
+                  className="group bg-white/10 hover:bg-white/20 text-white flex items-center gap-2 py-4 md:py-6 px-6 md:px-8 border border-white/10 rounded-lg shadow-lg"
                   onClick={() => timelineRef.current?.scrollIntoView({ behavior: 'smooth' })}
                 >
-                  <span className="text-lg">View Incident Timeline</span>
+                  <span className="text-base md:text-lg">View Incident Timeline</span>
                   <motion.div
                     animate={{ y: [0, 5, 0] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}
@@ -308,32 +529,32 @@ const WTF: React.FC = () => {
               
               {/* Quick stats about the incident */}
               <motion.div 
-                className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-20 max-w-4xl mx-auto"
+                className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-12 md:mt-20 max-w-4xl mx-auto px-2"
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1, duration: 0.8 }}
               >
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-center">
-                  <p className="text-3xl font-bold text-red-400">36h</p>
-                  <p className="text-sm text-gray-400">Incident Duration</p>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 md:p-4 border border-white/10 text-center">
+                  <p className="text-2xl md:text-3xl font-bold text-red-400">36h</p>
+                  <p className="text-xs md:text-sm text-gray-400">Incident Duration</p>
                 </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-center">
-                  <p className="text-3xl font-bold text-blue-400">12</p>
-                  <p className="text-sm text-gray-400">Systems Affected</p>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 md:p-4 border border-white/10 text-center">
+                  <p className="text-2xl md:text-3xl font-bold text-blue-400">12</p>
+                  <p className="text-xs md:text-sm text-gray-400">Systems Affected</p>
                 </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-center">
-                  <p className="text-3xl font-bold text-amber-400">4</p>
-                  <p className="text-sm text-gray-400">Attack Vectors</p>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 md:p-4 border border-white/10 text-center">
+                  <p className="text-2xl md:text-3xl font-bold text-amber-400">4</p>
+                  <p className="text-xs md:text-sm text-gray-400">Attack Vectors</p>
                 </div>
-                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10 text-center">
-                  <p className="text-3xl font-bold text-green-400">100%</p>
-                  <p className="text-sm text-gray-400">Recovery Rate</p>
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-3 md:p-4 border border-white/10 text-center">
+                  <p className="text-2xl md:text-3xl font-bold text-green-400">100%</p>
+                  <p className="text-xs md:text-sm text-gray-400">Recovery Rate</p>
                 </div>
               </motion.div>
             </div>
             
             {/* Timeline section with enhanced background */}
-            <div className="relative min-h-screen pb-32" ref={timelineRef}>
+            <div className="relative min-h-screen pb-20 md:pb-32" ref={timelineRef}>
               <TreeBackground />
               
               <motion.div
@@ -342,39 +563,39 @@ const WTF: React.FC = () => {
                 transition={{ delay: 0.4, duration: 1 }}
                 className="relative"
               >
-                <div className="text-center mb-20">
+                <div className="text-center mb-12 md:mb-20 px-2">
                   <motion.div
                     initial={{ opacity: 0, y: -20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.8 }}
                   >
-                    <h2 className="text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-white to-blue-500 mb-3">
+                    <h2 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-white to-blue-500 mb-3">
                       Incident Timeline
                     </h2>
                     <div className="w-24 h-1 bg-gradient-to-r from-red-500 to-blue-500 mx-auto rounded-full mb-4" />
-                    <p className="text-gray-400 mt-3 text-lg max-w-2xl mx-auto">
+                    <p className="text-gray-400 mt-3 text-base md:text-lg max-w-2xl mx-auto">
                       Explore the detailed timeline of the security breach. Click on events to discover the full story behind each development.
                     </p>
                   </motion.div>
                   
                   {/* Key legend */}
                   <motion.div 
-                    className="flex flex-wrap justify-center gap-4 mt-8"
+                    className="flex flex-wrap justify-center gap-3 md:gap-4 mt-6 md:mt-8"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.6, duration: 0.8 }}
                   >
                     <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full">
                       <div className="w-3 h-3 rounded-full bg-red-500" />
-                      <span className="text-sm text-gray-300">RED Team Events</span>
+                      <span className="text-xs md:text-sm text-gray-300">RED Team Events</span>
                     </div>
                     <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full">
                       <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="text-sm text-gray-300">BLUE Team Events</span>
+                      <span className="text-xs md:text-sm text-gray-300">BLUE Team Events</span>
                     </div>
                     <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full">
                       <div className="w-3 h-3 rounded-full bg-amber-500" />
-                      <span className="text-sm text-gray-300">Critical Incidents</span>
+                      <span className="text-xs md:text-sm text-gray-300">Critical Incidents</span>
                     </div>
                   </motion.div>
                 </div>
@@ -384,9 +605,9 @@ const WTF: React.FC = () => {
             </div>
             
             {/* Team selection section with enhanced UI */}
-            <div className="text-white mt-32 pt-20 border-t border-white/10">
+            <div className="text-white mt-20 md:mt-32 pt-12 md:pt-20 border-t border-white/10 px-2">
               <motion.h2 
-                className="text-4xl font-bold mb-6 text-center"
+                className="text-3xl md:text-4xl font-bold mb-4 md:mb-6 text-center"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
@@ -396,7 +617,7 @@ const WTF: React.FC = () => {
               </motion.h2>
               
               <motion.p 
-                className="text-center text-gray-400 max-w-3xl mx-auto mb-16"
+                className="text-center text-gray-400 max-w-3xl mx-auto mb-10 md:mb-16 text-base md:text-lg"
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
@@ -406,9 +627,9 @@ const WTF: React.FC = () => {
                 Which role would you take in this ongoing battle between attackers and defenders?
               </motion.p>
               
-              <div className="grid md:grid-cols-2 gap-8 lg:gap-16 max-w-6xl mx-auto">
+              <div className="grid md:grid-cols-2 gap-6 md:gap-8 lg:gap-16 max-w-6xl mx-auto">
                 <motion.div
-                  className="bg-gradient-to-br from-red-900/30 to-red-800/5 p-8 rounded-xl border border-red-800/30 flex flex-col items-center text-center shadow-xl shadow-red-900/10"
+                  className="bg-gradient-to-br from-red-900/30 to-red-800/5 p-5 md:p-8 rounded-xl border border-red-800/30 flex flex-col items-center text-center shadow-xl shadow-red-900/10"
                   initial={{ opacity: 0, x: -30 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
@@ -420,22 +641,22 @@ const WTF: React.FC = () => {
                   }}
                 >
                   <motion.div 
-                    className="w-24 h-24 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-red-600/20"
+                    className="w-16 h-16 md:w-24 md:h-24 bg-gradient-to-br from-red-600 to-red-800 rounded-full flex items-center justify-center mb-4 md:mb-6 shadow-lg shadow-red-600/20"
                     whileHover={{ scale: 1.1, rotate: 5 }}
                   >
-                    <span className="text-4xl font-bold text-white">R</span>
+                    <span className="text-3xl md:text-4xl font-bold text-white">R</span>
                   </motion.div>
                   
-                  <h3 className="text-3xl font-bold mb-3 text-red-400">RED TEAM</h3>
+                  <h3 className="text-2xl md:text-3xl font-bold mb-2 md:mb-3 text-red-400">RED TEAM</h3>
                   
-                  <div className="w-16 h-1 bg-red-600/50 rounded-full mb-6" />
+                  <div className="w-12 md:w-16 h-1 bg-red-600/50 rounded-full mb-4 md:mb-6" />
                   
-                  <p className="text-gray-300 mb-8 text-lg leading-relaxed">
+                  <p className="text-gray-300 mb-5 md:mb-8 text-base md:text-lg leading-relaxed">
                     Join the offensive security experts. Find vulnerabilities, exploit weaknesses,
                     and test system defenses before the real attackers do.
                   </p>
                   
-                  <ul className="text-left text-gray-400 mb-8 space-y-2">
+                  <ul className="text-left text-gray-400 mb-6 md:mb-8 space-y-2 text-sm md:text-base">
                     <li className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
                       <span>Perform advanced penetration testing</span>
@@ -450,13 +671,16 @@ const WTF: React.FC = () => {
                     </li>
                   </ul>
                   
-                  <Button className="bg-red-600 hover:bg-red-700 mt-auto text-white border-red-700 px-8 py-6 text-lg shadow-lg shadow-red-900/20 w-full">
+                  <Button 
+                    className="bg-red-600 hover:bg-red-700 mt-auto text-white border-red-700 px-6 py-4 md:px-8 md:py-6 text-base md:text-lg shadow-lg shadow-red-900/20 w-full"
+                    onClick={() => navigate('/red-team')}
+                  >
                     Join Red Team
                   </Button>
                 </motion.div>
                 
                 <motion.div
-                  className="bg-gradient-to-br from-blue-900/30 to-blue-800/5 p-8 rounded-xl border border-blue-800/30 flex flex-col items-center text-center shadow-xl shadow-blue-900/10"
+                  className="bg-gradient-to-br from-blue-900/30 to-blue-800/5 p-5 md:p-8 rounded-xl border border-blue-800/30 flex flex-col items-center text-center shadow-xl shadow-blue-900/10"
                   initial={{ opacity: 0, x: 30 }}
                   whileInView={{ opacity: 1, x: 0 }}
                   viewport={{ once: true }}
@@ -468,22 +692,22 @@ const WTF: React.FC = () => {
                   }}
                 >
                   <motion.div 
-                    className="w-24 h-24 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-blue-600/20"
+                    className="w-16 h-16 md:w-24 md:h-24 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full flex items-center justify-center mb-4 md:mb-6 shadow-lg shadow-blue-600/20"
                     whileHover={{ scale: 1.1, rotate: -5 }}
                   >
-                    <span className="text-4xl font-bold text-white">B</span>
+                    <span className="text-3xl md:text-4xl font-bold text-white">B</span>
                   </motion.div>
                   
-                  <h3 className="text-3xl font-bold mb-3 text-blue-400">BLUE TEAM</h3>
+                  <h3 className="text-2xl md:text-3xl font-bold mb-2 md:mb-3 text-blue-400">BLUE TEAM</h3>
                   
-                  <div className="w-16 h-1 bg-blue-600/50 rounded-full mb-6" />
+                  <div className="w-12 md:w-16 h-1 bg-blue-600/50 rounded-full mb-4 md:mb-6" />
                   
-                  <p className="text-gray-300 mb-8 text-lg leading-relaxed">
+                  <p className="text-gray-300 mb-5 md:mb-8 text-base md:text-lg leading-relaxed">
                     Join the defensive security professionals. Protect systems, detect threats,
                     and respond to incidents to keep the organization secure.
                   </p>
                   
-                  <ul className="text-left text-gray-400 mb-8 space-y-2">
+                  <ul className="text-left text-gray-400 mb-6 md:mb-8 space-y-2 text-sm md:text-base">
                     <li className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                       <span>Build robust defense strategies</span>
@@ -498,34 +722,24 @@ const WTF: React.FC = () => {
                     </li>
                   </ul>
                   
-                  <Button className="bg-blue-600 hover:bg-blue-700 mt-auto text-white border-blue-700 px-8 py-6 text-lg shadow-lg shadow-blue-900/20 w-full">
+                  <Button 
+                    className="bg-blue-600 hover:bg-blue-700 mt-auto text-white border-blue-700 px-6 py-4 md:px-8 md:py-6 text-base md:text-lg shadow-lg shadow-blue-900/20 w-full"
+                    onClick={() => navigate('/blue-team')}
+                  >
                     Join Blue Team
                   </Button>
                 </motion.div>
               </div>
             </div>
             
-            {/* Closing call to action */}
-            <motion.div 
-              className="text-center my-32 pt-12 relative"
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8 }}
-            >
-              <div className="absolute inset-0 bg-gradient-radial from-white/5 to-transparent opacity-30 z-0" />
-              
-              <div className="relative z-10">
-                <h2 className="text-4xl font-bold text-white mb-4">Are You Ready?</h2>
-                <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-8">
-                  The battle between security professionals and threat actors continues every day.
-                  Experience the thrill of cyber warfare in our upcoming event.
-                </p>
-                <Button className="bg-gradient-to-r from-red-600 to-blue-600 hover:from-red-500 hover:to-blue-500 text-white px-8 py-6 text-xl shadow-lg">
-                  Register Now
-                </Button>
-              </div>
+            {/* Spacer to ensure footer stays at bottom */}
+            <motion.div className="mt-20">
             </motion.div>
+            
+            {/* Footer */}
+            <div className="mt-auto w-full">
+              <Footer />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

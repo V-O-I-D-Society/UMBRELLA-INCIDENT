@@ -2,7 +2,7 @@ import React from "react";
 
 const Footer: React.FC = () => {
   return (
-    <footer className="relative py-12 px-4 border-t border-gray-700">
+    <footer className="w-full py-12 px-4 border-t border-gray-700 mt-auto">
       <div className="max-w-6xl mx-auto">
         <div className="grid md:grid-cols-3 gap-8">
           <div>
@@ -66,7 +66,7 @@ const Footer: React.FC = () => {
 
         <div className="border-t border-gray-700 mt-8 pt-8 text-center">
           <p className="text-gray-500 font-mono text-sm">
-            © 2025 <a href="https://github.com/Nemesis-AS" target="_blank" className="text-lime-400 text-underline">NemesisAS</a>. All rights reserved. | Classification
+            © 2025 <a href="https://github.com/Nemesis-AS" target="_blank" className="text-lime-400 text-underline">NemesisAS</a>. & <a href="https://github.com/soul-abhi" target="_blank" className="text-lime-400 text-underline">Soul Abhi</a>. All rights reserved. | Classification
             Level: ALPHA
           </p>
         </div>
